@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse
 import uvicorn
 
 from ai_dev_team import AIDevTeam
+from property_search_agent import PropertySearchAgent
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -27,6 +28,9 @@ app = FastAPI(title="AI Development Team", description="AI agents for GitHub aut
 
 # Initialize AI team
 ai_team = AIDevTeam()
+
+# Initialize property search agent
+property_agent = PropertySearchAgent()
 
 # GitHub webhook secret for signature verification
 WEBHOOK_SECRET = os.getenv('GITHUB_WEBHOOK_SECRET', '')
@@ -231,6 +235,80 @@ async def get_run_details(run_id: str):
     except Exception as e:
         logger.error(f"Error getting run details: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/property/search/buyer")
+async def search_properties_for_buyer(background_tasks: BackgroundTasks):
+    """Search properties based on buyer criteria from realconnect.online/buyer"""
+    try:
+        logger.info("Starting property search for buyer criteria")
+        background_tasks.add_task(run_buyer_property_search)
+        
+        return JSONResponse(
+            content={
+                "status": "accepted",
+                "message": "Buyer property search started",
+                "timestamp": datetime.utcnow().isoformat()
+            },
+            status_code=202
+        )
+    except Exception as e:
+        logger.error(f"Error starting buyer property search: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/property/search/seller")
+async def search_properties_for_seller(background_tasks: BackgroundTasks):
+    """Search properties based on seller criteria from realconnect.online/seller"""
+    try:
+        logger.info("Starting property search for seller criteria")
+        background_tasks.add_task(run_seller_property_search)
+        
+        return JSONResponse(
+            content={
+                "status": "accepted",
+                "message": "Seller property search started",
+                "timestamp": datetime.utcnow().isoformat()
+            },
+            status_code=202
+        )
+    except Exception as e:
+        logger.error(f"Error starting seller property search: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/property/search/status")
+async def get_property_search_status():
+    """Get status of property search operations"""
+    try:
+        # This would typically check a job queue or database
+        # For now, return a simple status
+        return {
+            "status": "operational",
+            "message": "Property search agent ready",
+            "timestamp": datetime.utcnow().isoformat(),
+            "available_sources": ["zillow", "realtor"]
+        }
+    except Exception as e:
+        logger.error(f"Error getting property search status: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def run_buyer_property_search():
+    """Background task to run buyer property search"""
+    try:
+        result = await property_agent.run_buyer_search()
+        logger.info(f"Buyer property search completed: {result.get('search_result', {}).get('total_found', 0)} properties found")
+        # Here you could store results in database, send to webhook, etc.
+        return result
+    except Exception as e:
+        logger.error(f"Error in buyer property search: {str(e)}")
+
+async def run_seller_property_search():
+    """Background task to run seller property search"""
+    try:
+        result = await property_agent.run_seller_search()
+        logger.info(f"Seller property search completed: {result.get('search_result', {}).get('total_found', 0)} properties found")
+        # Here you could store results in database, send to webhook, etc.
+        return result
+    except Exception as e:
+        logger.error(f"Error in seller property search: {str(e)}")
 
 if __name__ == "__main__":
     # Load environment variables

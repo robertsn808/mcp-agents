@@ -21,3 +21,7 @@ python-multipart==0.0.6
 
 # Logging and monitoring
 structlog==23.2.0
+
+# Property search dependencies
+beautifulsoup4==4.12.2
+lxml==4.9.3
