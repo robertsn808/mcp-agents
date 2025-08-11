@@ -5,6 +5,8 @@ AI Development Team - MCP-based AI agents for GitHub automation
 
 import asyncio
 import json
+import ast
+import re
 import logging
 from datetime import datetime
 from typing import Dict, List, Optional, Any
@@ -39,7 +41,7 @@ class AIDevTeam:
     
     def __init__(self):
         self.anthropic = AsyncAnthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
-        self.db_url = os.getenv('DATABASE_URL', 'postgresql://admin:strongpassword@service-site-db:5432/service_site')
+        self.db_url = os.getenv('DATABASE_URL', '')
         self.github_token = os.getenv('GITHUB_TOKEN')
         
         # Role-specific system prompts
@@ -152,7 +154,68 @@ Output format: JSON with analysis, vulnerabilities, recommendations, and actions
     
     async def connect_db(self):
         """Connect to PostgreSQL database"""
+        if not self.db_url:
+            raise RuntimeError("DATABASE_URL is not set; database connectivity is disabled")
         return await asyncpg.connect(self.db_url)
+
+    @staticmethod
+    def _strip_code_fences(text: str) -> str:
+        """Remove common Markdown code fences from a string."""
+        cleaned = text.strip()
+        if cleaned.startswith("```"):
+            cleaned = "\n".join(cleaned.splitlines()[1:])
+        if cleaned.endswith("```"):
+            cleaned = "\n".join(cleaned.splitlines()[:-1])
+        return cleaned.strip()
+
+    @staticmethod
+    def _try_load_json_lenient(text: str) -> Any:
+        """Attempt to parse JSON by extracting a JSON block and fixing common issues.
+        Strategy:
+        - Prefer ```json fenced blocks if present
+        - Strip markdown fences
+        - Remove // and /* */ comments
+        - Remove trailing commas repeatedly
+        - Normalize smart quotes
+        - Try json.loads; on failure, try ast.literal_eval after mapping true/false/null
+        """
+        raw = text.strip()
+        # Prefer fenced json block
+        fence_match = re.search(r"```json\s*([\s\S]*?)\s*```", raw, re.IGNORECASE)
+        if fence_match:
+            candidate = fence_match.group(1)
+        else:
+            candidate = AIDevTeam._strip_code_fences(raw)
+        # Extract the first top-level object to ignore prose before/after
+        start_index = candidate.find('{')
+        end_index = candidate.rfind('}')
+        if start_index != -1 and end_index != -1 and end_index > start_index:
+            candidate = candidate[start_index:end_index + 1]
+        # Remove line and block comments
+        candidate = re.sub(r"//.*?$", "", candidate, flags=re.MULTILINE)
+        candidate = re.sub(r"/\*[^*]*\*+(?:[^/*][^*]*\*+)*/", "", candidate, flags=re.DOTALL)
+        # Remove trailing commas repeatedly until stable
+        while True:
+            new_candidate = re.sub(r",\s*([}\]])", r"\1", candidate)
+            if new_candidate == candidate:
+                break
+            candidate = new_candidate
+        # Normalize smart quotes
+        candidate = candidate.replace('\u201c', '"').replace('\u201d', '"').replace('\u2019', "'")
+        # First try strict JSON
+        try:
+            return json.loads(candidate)
+        except Exception:
+            pass
+        # Fallback: attempt Python literal eval after mapping JSON constants
+        py_like = re.sub(r"\btrue\b", "True", candidate, flags=re.IGNORECASE)
+        py_like = re.sub(r"\bfalse\b", "False", py_like, flags=re.IGNORECASE)
+        py_like = re.sub(r"\bnull\b", "None", py_like, flags=re.IGNORECASE)
+        try:
+            return ast.literal_eval(py_like)
+        except Exception:
+            # Re-raise the original strict error for clearer logging if both fail
+            return json.loads(candidate)
     
     async def determine_role(self, event: GitHubEvent) -> str:
         """Determine the appropriate AI role based on the event and files changed"""
@@ -201,7 +264,7 @@ Please analyze the following code changes and provide recommendations:
 
 Context: {json.dumps(context, indent=2)}
 
-Please provide your analysis in the following JSON format:
+Please provide your analysis in the following JSON format (a single top-level JSON object):
 {{
     "analysis": "Brief analysis of the changes",
     "improvements": [
@@ -220,7 +283,9 @@ Please provide your analysis in the following JSON format:
     ],
     "priority": "low|medium|high",
     "confidence": 0.95
-}}'''}
+}}
+
+Return only valid JSON. Do not include any prose, markdown, or code fences. If unsure, still return syntactically valid JSON matching the schema above.'''}
         ]
         
         try:
@@ -232,7 +297,10 @@ Please provide your analysis in the following JSON format:
             )
             
             content = response.content[0].text
-            result_data = json.loads(content)
+            try:
+                result_data = json.loads(content)
+            except json.JSONDecodeError:
+                result_data = self._try_load_json_lenient(content)
             
             return AgentResult(
                 role=role,
@@ -317,6 +385,9 @@ Please provide your analysis in the following JSON format:
     async def log_run(self, run_id: str, event: GitHubEvent, role: str, result: AgentResult, action_results: List[Dict]):
         """Log the agent run to database"""
         try:
+            if not self.db_url:
+                logger.info("Skipping database logging because DATABASE_URL is not set")
+                return
             conn = await self.connect_db()
             
             # Insert run record
