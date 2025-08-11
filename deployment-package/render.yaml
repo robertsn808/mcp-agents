@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: mcp-agents
+    env: python
+    region: oregon
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: python webhook_server.py
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: HOST  
+        value: 0.0.0.0
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: GITHUB_WEBHOOK_SECRET
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+    healthCheckPath: /
+    
+databases:
+  - name: mcp-agents-db
+    databaseName: mcp_agents
+    user: mcp_user
+    region: oregon
+    plan: starter

@@ -1,0 +1,27 @@
+# AI Development Team - Python Dependencies
+
+# Core dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.1
+
+# AI Provider
+anthropic==0.34.2
+
+# Database
+asyncpg==0.29.0
+
+# GitHub integration (for future MCP integration)
+PyGithub==1.59.1
+httpx==0.26.0
+
+# Utilities
+python-dotenv==1.0.0
+python-multipart==0.0.6
+
+# Logging and monitoring
+structlog==23.2.0
+
+# Property search dependencies
+beautifulsoup4==4.12.2
+lxml==4.9.3

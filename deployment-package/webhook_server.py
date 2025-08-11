@@ -15,7 +15,6 @@ from datetime import datetime
 
 from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 from ai_dev_team import AIDevTeam
@@ -26,26 +25,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="AI Development Team", description="AI agents for GitHub automation")
-
-# CORS configuration (use env var CORS_ALLOW_ORIGINS as comma-separated list)
-allowed_origins_env = os.getenv('CORS_ALLOW_ORIGINS', '')
-if allowed_origins_env:
-    allow_origins = [origin.strip() for origin in allowed_origins_env.split(',') if origin.strip()]
-else:
-    allow_origins = [
-        "https://realconnect.online",
-        "https://mcp.realconnect.online",
-        "http://localhost:3000",
-        "http://localhost:5173",
-    ]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allow_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Initialize AI team
 ai_team = AIDevTeam()

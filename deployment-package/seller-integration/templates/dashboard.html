@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="|${pageTitle} - Real Estate Connect CRM|">Market Analysis Dashboard</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-online { background-color: #28a745; }
+        .status-offline { background-color: #dc3545; }
+        .property-card {
+            transition: transform 0.2s;
+        }
+        .property-card:hover {
+            transform: translateY(-2px);
+        }
+        .analysis-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .search-btn {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            border: none;
+            transition: all 0.3s;
+        }
+        .search-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 5px 15px rgba(240, 147, 251, 0.4);
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/admin">
+                <i class="fas fa-home me-2"></i>Real Estate Connect CRM
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/admin">Dashboard</a>
+                <a class="nav-link active" href="/admin/property-analysis">Market Analysis</a>
+                <a class="nav-link" href="/admin/clients">Clients</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <div class="row">
+            <!-- Header Section -->
+            <div class="col-12 mb-4">
+                <div class="card analysis-section">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-md-8">
+                                <h1 class="h2 mb-3">
+                                    <i class="fas fa-chart-line me-2"></i>Market Analysis Dashboard
+                                </h1>
+                                <p class="mb-0">
+                                    AI-powered property search and market intelligence powered by MCP Agent
+                                </p>
+                            </div>
+                            <div class="col-md-4 text-md-end">
+                                <div class="d-flex align-items-center justify-content-md-end">
+                                    <span class="status-indicator" 
+                                          th:classappend="${agentAvailable} ? 'status-online' : 'status-offline'"></span>
+                                    <span th:text="${agentAvailable} ? 'MCP Agent Online' : 'MCP Agent Offline'">
+                                        Agent Status
+                                    </span>
+                                </div>
+                                <small class="text-light" th:text="${agentStatus.timestamp}">Last updated</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Quick Actions -->
+            <div class="col-lg-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-search me-2"></i>Quick Actions
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-3">
+                            <button class="btn btn-lg search-btn text-white" 
+                                    onclick="triggerSellerAnalysis()"
+                                    id="sellerAnalysisBtn"
+                                    th:disabled="${!agentAvailable}">
+                                <i class="fas fa-home me-2"></i>
+                                Analyze Seller Market
+                            </button>
+                            
+                            <button class="btn btn-lg btn-info text-white" 
+                                    onclick="triggerBuyerSearch()"
+                                    id="buyerSearchBtn"
+                                    th:disabled="${!agentAvailable}">
+                                <i class="fas fa-users me-2"></i>
+                                Search Buyer Properties
+                            </button>
+                            
+                            <button class="btn btn-lg btn-warning text-white" 
+                                    onclick="showCustomSearchModal()"
+                                    th:disabled="${!agentAvailable}">
+                                <i class="fas fa-filter me-2"></i>
+                                Custom Search
+                            </button>
+                        </div>
+                        
+                        <div class="mt-3 text-muted small" th:unless="${agentAvailable}">
+                            <i class="fas fa-exclamation-triangle me-1"></i>
+                            MCP Agent is offline. Please check the service connection.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Agent Status -->
+            <div class="col-lg-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-robot me-2"></i>Agent Status
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <strong>Status:</strong> 
+                            <span class="badge" 
+                                  th:classappend="${agentAvailable} ? 'bg-success' : 'bg-danger'"
+                                  th:text="${agentStatus.status}">
+                                Status
+                            </span>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <strong>Message:</strong>
+                            <p class="mb-0 text-muted" th:text="${agentStatus.message}">Agent message</p>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <strong>Available Sources:</strong>
+                            <div class="mt-1">
+                                <span class="badge bg-secondary me-1">Zillow</span>
+                                <span class="badge bg-secondary me-1">Realtor.com</span>
+                            </div>
+                        </div>
+                        
+                        <button class="btn btn-outline-primary btn-sm" onclick="refreshAgentStatus()">
+                            <i class="fas fa-sync-alt me-1"></i>Refresh Status
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Analysis Results -->
+            <div class="col-lg-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0">
+                            <i class="fas fa-clock me-2"></i>Recent Results
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="recentResults">
+                            <p class="text-muted text-center py-4">
+                                <i class="fas fa-chart-bar fa-3x mb-3 d-block"></i>
+                                No recent analysis results.<br>
+                                Start a search to see results here.
+                            </p>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <a href="/admin/property-analysis/results" class="btn btn-outline-warning w-100">
+                                <i class="fas fa-chart-line me-2"></i>View All Results
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Modal -->
+        <div class="modal fade" id="loadingModal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-body text-center py-4">
+                        <div class="spinner-border text-primary mb-3" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <h5 id="loadingText">Processing your request...</h5>
+                        <p class="text-muted mb-0" id="loadingSubtext">This may take a few moments</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Custom Search Modal -->
+        <div class="modal fade" id="customSearchModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Custom Property Search</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="customSearchForm">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="location" class="form-label">Location *</label>
+                                    <input type="text" class="form-control" id="location" name="location" 
+                                           placeholder="e.g., San Francisco, CA" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="propertyType" class="form-label">Property Type</label>
+                                    <select class="form-select" id="propertyType" name="propertyType">
+                                        <option value="">All Types</option>
+                                        <option value="house">House</option>
+                                        <option value="condo">Condo</option>
+                                        <option value="townhouse">Townhouse</option>
+                                        <option value="apartment">Apartment</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="minPrice" class="form-label">Min Price</label>
+                                    <input type="number" class="form-control" id="minPrice" name="minPrice" 
+                                           placeholder="e.g., 300000">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="maxPrice" class="form-label">Max Price</label>
+                                    <input type="number" class="form-control" id="maxPrice" name="maxPrice" 
+                                           placeholder="e.g., 800000">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="bedrooms" class="form-label">Bedrooms</label>
+                                    <select class="form-select" id="bedrooms" name="bedrooms">
+                                        <option value="">Any</option>
+                                        <option value="1">1+</option>
+                                        <option value="2">2+</option>
+                                        <option value="3">3+</option>
+                                        <option value="4">4+</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="bathrooms" class="form-label">Bathrooms</label>
+                                    <select class="form-select" id="bathrooms" name="bathrooms">
+                                        <option value="">Any</option>
+                                        <option value="1">1+</option>
+                                        <option value="1.5">1.5+</option>
+                                        <option value="2">2+</option>
+                                        <option value="3">3+</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" onclick="executeCustomSearch()">
+                            <i class="fas fa-search me-2"></i>Search Properties
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        let loadingModal, customSearchModal;
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            loadingModal = new bootstrap.Modal(document.getElementById('loadingModal'));
+            customSearchModal = new bootstrap.Modal(document.getElementById('customSearchModal'));
+        });
+        
+        function showLoading(text = 'Processing your request...', subtext = 'This may take a few moments') {
+            document.getElementById('loadingText').textContent = text;
+            document.getElementById('loadingSubtext').textContent = subtext;
+            loadingModal.show();
+        }
+        
+        function hideLoading() {
+            loadingModal.hide();
+        }
+        
+        function showCustomSearchModal() {
+            customSearchModal.show();
+        }
+        
+        async function triggerSellerAnalysis() {
+            const btn = document.getElementById('sellerAnalysisBtn');
+            const originalText = btn.innerHTML;
+            
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Analyzing...';
+            
+            showLoading('Analyzing seller market...', 'Searching multiple real estate sources');
+            
+            try {
+                const response = await fetch('/admin/property-analysis/trigger-seller-analysis', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const data = await response.json();
+                hideLoading();
+                
+                if (data.success) {
+                    showAlert('success', 'Market Analysis Started', 
+                        data.message || 'Market analysis has been initiated successfully.');
+                    
+                    if (data.totalProperties !== undefined) {
+                        updateRecentResults('seller', data);
+                    }
+                } else {
+                    showAlert('danger', 'Analysis Failed', data.message || 'Failed to start market analysis.');
+                }
+            } catch (error) {
+                hideLoading();
+                showAlert('danger', 'Error', 'Failed to connect to the analysis service.');
+                console.error('Error:', error);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+        
+        async function triggerBuyerSearch() {
+            const btn = document.getElementById('buyerSearchBtn');
+            const originalText = btn.innerHTML;
+            
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Searching...';
+            
+            showLoading('Searching buyer properties...', 'Analyzing market for potential buyers');
+            
+            try {
+                const response = await fetch('/admin/property-analysis/trigger-buyer-search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const data = await response.json();
+                hideLoading();
+                
+                if (data.success) {
+                    showAlert('success', 'Property Search Started', 
+                        data.message || 'Buyer property search has been initiated.');
+                    
+                    if (data.totalProperties !== undefined) {
+                        updateRecentResults('buyer', data);
+                    }
+                } else {
+                    showAlert('danger', 'Search Failed', data.message || 'Failed to start property search.');
+                }
+            } catch (error) {
+                hideLoading();
+                showAlert('danger', 'Error', 'Failed to connect to the search service.');
+                console.error('Error:', error);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+        
+        async function executeCustomSearch() {
+            const form = document.getElementById('customSearchForm');
+            const formData = new FormData(form);
+            
+            const criteria = {
+                location: formData.get('location'),
+                propertyType: formData.get('propertyType') || null,
+                minPrice: formData.get('minPrice') ? parseInt(formData.get('minPrice')) : null,
+                maxPrice: formData.get('maxPrice') ? parseInt(formData.get('maxPrice')) : null,
+                bedrooms: formData.get('bedrooms') ? parseInt(formData.get('bedrooms')) : null,
+                bathrooms: formData.get('bathrooms') ? parseFloat(formData.get('bathrooms')) : null
+            };
+            
+            if (!criteria.location.trim()) {
+                showAlert('warning', 'Validation Error', 'Please enter a location.');
+                return;
+            }
+            
+            customSearchModal.hide();
+            showLoading('Executing custom search...', 'Searching with your specific criteria');
+            
+            try {
+                const response = await fetch('/admin/property-analysis/custom-search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(criteria)
+                });
+                
+                const data = await response.json();
+                hideLoading();
+                
+                if (data.success) {
+                    showAlert('success', 'Custom Search Completed', 
+                        `Found ${data.totalProperties || 0} properties matching your criteria.`);
+                    
+                    updateRecentResults('custom', data);
+                } else {
+                    showAlert('danger', 'Search Failed', data.message || 'Custom search failed.');
+                }
+            } catch (error) {
+                hideLoading();
+                showAlert('danger', 'Error', 'Failed to execute custom search.');
+                console.error('Error:', error);
+            }
+        }
+        
+        async function refreshAgentStatus() {
+            try {
+                const response = await fetch('/admin/property-analysis/agent-status');
+                const data = await response.json();
+                
+                // Update status indicator
+                const indicator = document.querySelector('.status-indicator');
+                indicator.className = 'status-indicator ' + (data.available ? 'status-online' : 'status-offline');
+                
+                showAlert('info', 'Status Updated', 
+                    `Agent is ${data.available ? 'online' : 'offline'}. ${data.message}`);
+                    
+            } catch (error) {
+                showAlert('danger', 'Error', 'Failed to refresh agent status.');
+                console.error('Error:', error);
+            }
+        }
+        
+        function updateRecentResults(type, data) {
+            const resultsDiv = document.getElementById('recentResults');
+            const timestamp = new Date().toLocaleString();
+            
+            resultsDiv.innerHTML = `
+                <div class="border-start border-primary border-3 ps-3 mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <strong class="text-primary">${type.charAt(0).toUpperCase() + type.slice(1)} Search</strong>
+                        <small class="text-muted">${timestamp}</small>
+                    </div>
+                    <p class="mb-1">${data.totalProperties || 0} properties found</p>
+                    <small class="text-muted">${data.message}</small>
+                </div>
+            `;
+        }
+        
+        function showAlert(type, title, message) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+            alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 1060; max-width: 400px;';
+            
+            alertDiv.innerHTML = `
+                <strong>${title}:</strong> ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            document.body.appendChild(alertDiv);
+            
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
