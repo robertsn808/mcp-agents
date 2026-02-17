@@ -17,7 +17,7 @@ httpx==0.26.0
 
 # Utilities
 python-dotenv==1.0.0
-python-multipart==0.0.6
+python-multipart==0.0.18
 
 # Logging and monitoring
 structlog==23.2.0
